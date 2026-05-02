@@ -25,23 +25,31 @@ class _CameraScreenState extends State<CameraScreen> {
 
   bool _flash = false;
 
-  Color _selectedColor = Colors.white;
-
-  String _colorName = "-";
-  double _match = 0;
-
-  String _hexCode = "#FFFFFF";
-  String _rgbCode = "RGB(255,255,255)";
+  /// true = gallery
+  /// false = camera
+  bool _isGalleryMode = false;
 
   Uint8List? _galleryImage;
   img.Image? _decodedImage;
 
   Offset? _touchPosition;
 
+  final GlobalKey _imageKey = GlobalKey();
+
   final TransformationController _transformationController =
       TransformationController();
 
-  final GlobalKey _imageKey = GlobalKey();
+  // =========================
+  // COLOR INFO
+  // =========================
+
+  Color _selectedColor = Colors.white;
+
+  String _colorName = "White";
+  double _match = 100;
+
+  String _hexCode = "#FFFFFF";
+  String _rgbCode = "RGB(255,255,255)";
 
   List<Map<String, dynamic>> savedColors = [];
 
@@ -71,26 +79,38 @@ class _CameraScreenState extends State<CameraScreen> {
     super.dispose();
   }
 
-  // =========================
-  // SELECT SOURCE POPUP
-  // =========================
+  // =====================================================
+  // SOURCE POPUP
+  // =====================================================
 
   void _showSourcePopup() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) {
-        return Padding(
+        return Container(
           padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Color(0xfff5f7fb),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(35)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Container(
+                width: 70,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(50),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
               const Text(
-                "Select Source",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                "Choose Source",
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
 
               const SizedBox(height: 30),
@@ -99,14 +119,17 @@ class _CameraScreenState extends State<CameraScreen> {
                 children: [
                   Expanded(
                     child: _sourceButton(
-                      icon: Icons.camera_alt,
+                      icon: Icons.camera_alt_rounded,
                       title: "Camera",
+                      color: Colors.blue,
                       onTap: () {
                         Navigator.pop(context);
 
                         setState(() {
+                          _isGalleryMode = false;
                           _galleryImage = null;
                           _decodedImage = null;
+                          _touchPosition = null;
                         });
                       },
                     ),
@@ -116,8 +139,9 @@ class _CameraScreenState extends State<CameraScreen> {
 
                   Expanded(
                     child: _sourceButton(
-                      icon: Icons.photo,
+                      icon: Icons.photo_library_rounded,
                       title: "Gallery",
+                      color: Colors.purple,
                       onTap: () {
                         Navigator.pop(context);
                         _pickImage();
@@ -138,36 +162,57 @@ class _CameraScreenState extends State<CameraScreen> {
   Widget _sourceButton({
     required IconData icon,
     required String title,
+    required Color color,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 130,
+        height: 150,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          color: Colors.white,
+          gradient: LinearGradient(
+            colors: [color.withOpacity(.15), Colors.white],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: color.withOpacity(.2)),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 15),
+            BoxShadow(
+              color: color.withOpacity(.08),
+              blurRadius: 25,
+              offset: const Offset(0, 10),
+            ),
           ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 45),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(icon, color: Colors.white, size: 34),
+            ),
 
-            const SizedBox(height: 15),
+            const SizedBox(height: 18),
 
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // =========================
+  // =====================================================
   // PICK IMAGE
-  // =========================
+  // =====================================================
 
   Future<void> _pickImage() async {
     final file = await _picker.pickImage(source: ImageSource.gallery);
@@ -177,27 +222,45 @@ class _CameraScreenState extends State<CameraScreen> {
     final bytes = await file.readAsBytes();
 
     setState(() {
+      _isGalleryMode = true;
+
       _galleryImage = bytes;
       _decodedImage = img.decodeImage(bytes);
+
       _touchPosition = null;
     });
   }
 
-  // =========================
-  // TOUCH DETECTION
-  // =========================
+  // =====================================================
+  // SWITCH TO CAMERA
+  // =====================================================
 
-  void _pickColorFromTouch(TapDownDetails details) async {
-    if (_galleryImage != null) {
+  void _switchToCamera() {
+    setState(() {
+      _isGalleryMode = false;
+
+      _galleryImage = null;
+      _decodedImage = null;
+
+      _touchPosition = null;
+    });
+  }
+
+  // =====================================================
+  // TOUCH DETECTION
+  // =====================================================
+
+  void _pickColor(TapDownDetails details) {
+    if (_isGalleryMode) {
       _pickGalleryColor(details);
     } else {
       _pickCameraColor(details);
     }
   }
 
-  // =========================
+  // =====================================================
   // GALLERY COLOR PICK
-  // =========================
+  // =====================================================
 
   void _pickGalleryColor(TapDownDetails details) {
     if (_decodedImage == null) return;
@@ -213,8 +276,8 @@ class _CameraScreenState extends State<CameraScreen> {
 
     final size = box.size;
 
-    double scaleX = _decodedImage!.width / size.width;
-    double scaleY = _decodedImage!.height / size.height;
+    final scaleX = _decodedImage!.width / size.width;
+    final scaleY = _decodedImage!.height / size.height;
 
     int x = (localPosition.dx * scaleX).toInt();
     int y = (localPosition.dy * scaleY).toInt();
@@ -227,9 +290,9 @@ class _CameraScreenState extends State<CameraScreen> {
     _updateColor(pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt());
   }
 
-  // =========================
+  // =====================================================
   // CAMERA COLOR PICK
-  // =========================
+  // =====================================================
 
   Future<void> _pickCameraColor(TapDownDetails details) async {
     try {
@@ -242,9 +305,9 @@ class _CameraScreenState extends State<CameraScreen> {
         _touchPosition = localPosition;
       });
 
-      final file = await _controller.takePicture();
+      final XFile file = await _controller.takePicture();
 
-      final bytes = await file.readAsBytes();
+      final Uint8List bytes = await file.readAsBytes();
 
       final image = img.decodeImage(bytes);
 
@@ -252,8 +315,8 @@ class _CameraScreenState extends State<CameraScreen> {
 
       final size = box.size;
 
-      double scaleX = image.width / size.width;
-      double scaleY = image.height / size.height;
+      final scaleX = image.width / size.width;
+      final scaleY = image.height / size.height;
 
       int x = (localPosition.dx * scaleX).toInt();
       int y = (localPosition.dy * scaleY).toInt();
@@ -269,9 +332,9 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
-  // =========================
+  // =====================================================
   // UPDATE COLOR
-  // =========================
+  // =====================================================
 
   void _updateColor(int r, int g, int b) {
     final color = Color.fromARGB(255, r, g, b);
@@ -284,8 +347,6 @@ class _CameraScreenState extends State<CameraScreen> {
                 "${b.toRadixString(16).padLeft(2, '0')}"
             .toUpperCase();
 
-    final rgb = "RGB($r, $g, $b)";
-
     setState(() {
       _selectedColor = color;
 
@@ -293,13 +354,13 @@ class _CameraScreenState extends State<CameraScreen> {
       _match = match.match;
 
       _hexCode = hex;
-      _rgbCode = rgb;
+      _rgbCode = "RGB($r, $g, $b)";
     });
   }
 
-  // =========================
+  // =====================================================
   // FLASH
-  // =========================
+  // =====================================================
 
   Future<void> _toggleFlash() async {
     try {
@@ -315,9 +376,9 @@ class _CameraScreenState extends State<CameraScreen> {
     } catch (_) {}
   }
 
-  // =========================
+  // =====================================================
   // SAVE
-  // =========================
+  // =====================================================
 
   void _saveColor() {
     savedColors.add({
@@ -333,9 +394,9 @@ class _CameraScreenState extends State<CameraScreen> {
     ).showSnackBar(const SnackBar(content: Text("Color Saved")));
   }
 
-  // =========================
-  // SAVED COLORS
-  // =========================
+  // =====================================================
+  // OPEN SAVED
+  // =====================================================
 
   void _openSavedColors() {
     Navigator.push(
@@ -346,9 +407,9 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
-  // =========================
+  // =====================================================
   // UI
-  // =========================
+  // =====================================================
 
   @override
   Widget build(BuildContext context) {
@@ -365,37 +426,56 @@ class _CameraScreenState extends State<CameraScreen> {
           return SafeArea(
             child: Column(
               children: [
-                // =========================
+                // =====================================================
                 // TOP BAR
-                // =========================
+                // =====================================================
                 Padding(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        "Color Picker",
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Color Picker",
+                            style: TextStyle(
+                              fontSize: 25,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+
+                          SizedBox(height: 8),
+
+                          Text(
+                            "Tap anywhere to detect color",
+                            style: TextStyle(color: Colors.black54),
+                          ),
+                        ],
                       ),
 
                       Row(
                         children: [
-                          _topButton(icon: Icons.photo, onTap: _pickImage),
-
-                          const SizedBox(width: 10),
-
-                          _topButton(
-                            icon: _flash ? Icons.flash_on : Icons.flash_off,
-                            onTap: _toggleFlash,
+                          _premiumButton(
+                            icon: Icons.swap_horiz_rounded,
+                            onTap: _showSourcePopup,
                           ),
 
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 3),
 
-                          _topButton(
-                            icon: Icons.palette,
+                          _premiumButton(
+                            icon: Icons.flash_on_rounded,
+                            onTap: _toggleFlash,
+                            active: _flash,
+                          ),
+
+                          const SizedBox(width: 3),
+
+                          _premiumButton(
+                            icon: Icons.palette_rounded,
                             onTap: _openSavedColors,
                           ),
                         ],
@@ -404,29 +484,29 @@ class _CameraScreenState extends State<CameraScreen> {
                   ),
                 ),
 
-                // =========================
-                // CAMERA / IMAGE VIEW
-                // =========================
+                // =====================================================
+                // IMAGE / CAMERA VIEW
+                // =====================================================
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(30),
-                      child: GestureDetector(
-                        onTapDown: _pickColorFromTouch,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: InteractiveViewer(
-                                transformationController:
-                                    _transformationController,
-                                minScale: 1,
-                                maxScale: 5,
-                                child: _galleryImage != null
+                      borderRadius: BorderRadius.circular(35),
+                      child: Stack(
+                        children: [
+                          GestureDetector(
+                            onTapDown: _pickColor,
+                            child: InteractiveViewer(
+                              transformationController:
+                                  _transformationController,
+                              minScale: 1,
+                              maxScale: 8,
+                              child: SizedBox.expand(
+                                child: _isGalleryMode
                                     ? Image.memory(
                                         _galleryImage!,
                                         key: _imageKey,
-                                        fit: BoxFit.contain,
+                                        fit: BoxFit.cover,
                                       )
                                     : CameraPreview(
                                         _controller,
@@ -434,79 +514,108 @@ class _CameraScreenState extends State<CameraScreen> {
                                       ),
                               ),
                             ),
+                          ),
 
-                            Positioned.fill(
+                          // Overlay
+                          Positioned.fill(
+                            child: IgnorePointer(
                               child: Container(
-                                color: Colors.black.withOpacity(.05),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.black.withOpacity(.25),
+                                      Colors.transparent,
+                                      Colors.black.withOpacity(.15),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
+                                ),
                               ),
                             ),
+                          ),
 
-                            // =========================
-                            // TOUCH POINTER
-                            // =========================
-                            if (_touchPosition == null)
-                              const Center(
-                                child: Icon(
-                                  Icons.add,
-                                  color: Colors.white,
-                                  size: 70,
-                                ),
-                              ),
-
-                            if (_touchPosition != null)
-                              Positioned(
-                                left: _touchPosition!.dx - 18,
-                                top: _touchPosition!.dy - 18,
-                                child: Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 3,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(.3),
-                                        blurRadius: 10,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                            // =========================
-                            // COLOR PREVIEW
-                            // =========================
+                          // POINTER
+                          if (_touchPosition != null)
                             Positioned(
-                              top: 20,
-                              left: 20,
+                              left: _touchPosition!.dx - 22,
+                              top: _touchPosition!.dy - 22,
                               child: Container(
-                                width: 80,
-                                height: 80,
+                                width: 44,
+                                height: 44,
                                 decoration: BoxDecoration(
-                                  color: _selectedColor,
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: Colors.white,
-                                    width: 4,
+                                    width: 3,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(.35),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      color: _selectedColor,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
+
+                          // LIVE COLOR
+                          Positioned(
+                            top: 20,
+                            left: 20,
+                            child: Container(
+                              width: 85,
+                              height: 85,
+                              decoration: BoxDecoration(
+                                color: _selectedColor,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 4,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(.25),
+                                    blurRadius: 20,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          // MODE BADGE
+                          Positioned(
+                            top: 24,
+                            right: 20,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                _isGalleryMode ? "Gallery" : "Camera",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -514,21 +623,28 @@ class _CameraScreenState extends State<CameraScreen> {
 
                 const SizedBox(height: 20),
 
-                // =========================
+                // =====================================================
                 // INFO PANEL
-                // =========================
+                // =====================================================
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(35),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
-                        padding: const EdgeInsets.all(22),
+                        padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(.75),
-                          borderRadius: BorderRadius.circular(30),
+                          color: Colors.white.withOpacity(.82),
+                          borderRadius: BorderRadius.circular(35),
                           border: Border.all(color: Colors.black12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(.06),
+                              blurRadius: 30,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
                         child: Column(
                           children: [
@@ -542,9 +658,15 @@ class _CameraScreenState extends State<CameraScreen> {
 
                             const SizedBox(height: 8),
 
-                            Text("Match ${_match.toStringAsFixed(1)}%"),
+                            Text(
+                              "Match ${_match.toStringAsFixed(1)}%",
+                              style: const TextStyle(
+                                color: Colors.black54,
+                                fontSize: 16,
+                              ),
+                            ),
 
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 24),
 
                             Row(
                               children: [
@@ -556,29 +678,37 @@ class _CameraScreenState extends State<CameraScreen> {
                               ],
                             ),
 
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 24),
 
-                            SizedBox(
-                              width: double.infinity,
-                              height: 58,
-                              child: ElevatedButton.icon(
-                                onPressed: _saveColor,
-                                icon: const Icon(Icons.save),
-                                label: const Text(
-                                  "Save Color",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 17,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _actionButton(
+                                    title: "Save Color",
+                                    icon: Icons.save,
+                                    color: _selectedColor,
+                                    onTap: _saveColor,
                                   ),
                                 ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _selectedColor,
-                                  foregroundColor: Colors.black,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(22),
+
+                                const SizedBox(width: 12),
+
+                                Expanded(
+                                  child: _actionButton(
+                                    title: _isGalleryMode
+                                        ? "Camera"
+                                        : "Gallery",
+                                    icon: _isGalleryMode
+                                        ? Icons.camera_alt
+                                        : Icons.photo,
+                                    color: Colors.black,
+                                    textColor: Colors.white,
+                                    onTap: _isGalleryMode
+                                        ? _switchToCamera
+                                        : _pickImage,
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
                           ],
                         ),
@@ -596,38 +726,79 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
-  // =========================
-  // TOP BUTTON
-  // =========================
+  // =====================================================
+  // PREMIUM BUTTON
+  // =====================================================
 
-  Widget _topButton({required IconData icon, required VoidCallback onTap}) {
+  Widget _premiumButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    bool active = false,
+  }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
         width: 50,
         height: 50,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          color: active ? Colors.orange : Colors.white,
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(.05), blurRadius: 10),
+            BoxShadow(
+              color: Colors.black.withOpacity(.06),
+              blurRadius: 15,
+              offset: const Offset(0, 6),
+            ),
           ],
         ),
-        child: Icon(icon),
+        child: Icon(icon, color: active ? Colors.white : Colors.black87),
       ),
     );
   }
 
-  // =========================
+  // =====================================================
+  // ACTION BUTTON
+  // =====================================================
+
+  Widget _actionButton({
+    required String title,
+    required IconData icon,
+    required Color color,
+    Color textColor = Colors.black,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      height: 58,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon),
+        label: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: textColor,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =====================================================
   // INFO CARD
-  // =========================
+  // =====================================================
 
   Widget _infoCard(String title, String value) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 10),
+        ],
       ),
       child: Column(
         children: [
@@ -641,7 +812,7 @@ class _CameraScreenState extends State<CameraScreen> {
           Text(
             value,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
           ),
         ],
       ),
